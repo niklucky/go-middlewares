@@ -34,17 +34,15 @@ type MQExchange struct {
 func (r *RabbitMQ) connect() error {
 	conn, err := amqp.Dial(r.getAddressString())
 	if err != nil {
+		logOnError(err, "Dial")
 		return err
 	}
-	defer conn.Close()
-
+	r.Conn = conn
 	ch, err := conn.Channel()
 	if err != nil {
 		return err
 	}
 	r.Channel = ch
-	defer ch.Close()
-
 	return ch.ExchangeDeclare(
 		r.Exchange.Name,
 		r.Exchange.Type,
@@ -54,6 +52,15 @@ func (r *RabbitMQ) connect() error {
 		r.Exchange.NoWait,
 		nil, // arguments
 	)
+}
+
+/*
+Close - closing connections
+*/
+func (r *RabbitMQ) Close() error {
+	r.Conn.Close()
+	r.Channel.Close()
+	return nil
 }
 
 /*
@@ -133,7 +140,7 @@ func (r *RabbitMQ) Consume(handler func(interface{})) error {
 	}()
 
 	<-forever
-
+	r.Close()
 	return nil
 }
 

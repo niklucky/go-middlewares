@@ -16,15 +16,23 @@ WebsocketClient - client that listens for events and sends actions to Websocket 
 */
 type WebsocketClient struct {
 	Host
-	Conn    *websocket.Conn
-	handler func(interface{})
+	Conn         *websocket.Conn
+	dataHandler  func(interface{})
+	errorHandler func(interface{})
 }
 
 /*
-AddHandler - handler will handle incoming data
+OnData - handler will handle incoming data
 */
-func (ws *WebsocketClient) AddHandler(h func(interface{})) {
-	ws.handler = h
+func (ws *WebsocketClient) OnData(h func(interface{})) {
+	ws.dataHandler = h
+}
+
+/*
+OnError - handler will handle incoming data
+*/
+func (ws *WebsocketClient) OnError(h func(interface{})) {
+	ws.errorHandler = h
 }
 
 /*
@@ -59,13 +67,25 @@ func (ws *WebsocketClient) Listen() {
 			err := ws.Conn.ReadJSON(&message)
 			fmt.Println("New message: ", time.Now())
 			if err != nil {
+				go ws.handleError(err)
 				log.Println("Read error:", err)
 				fmt.Println("Connection state:", ws.Conn)
 				return
 			}
-			go ws.handler(message)
+			go ws.handleData(message)
 		}
 	}()
+}
+
+func (ws *WebsocketClient) handleData(data interface{}) {
+	if ws.dataHandler != nil {
+		ws.dataHandler(data)
+	}
+}
+func (ws *WebsocketClient) handleError(data interface{}) {
+	if ws.errorHandler != nil {
+		ws.errorHandler(data)
+	}
 }
 
 /*

@@ -68,8 +68,6 @@ func (ws *WebsocketClient) Listen() {
 			fmt.Println("New message: ", time.Now())
 			if err != nil {
 				go ws.handleError(err)
-				log.Println("Read error:", err)
-				fmt.Println("Connection state:", ws.Conn)
 				return
 			}
 			go ws.handleData(message)
@@ -82,9 +80,10 @@ func (ws *WebsocketClient) handleData(data interface{}) {
 		ws.dataHandler(data)
 	}
 }
-func (ws *WebsocketClient) handleError(data interface{}) {
+func (ws *WebsocketClient) handleError(err interface{}) {
+	log.Println("Read error:", err)
 	if ws.errorHandler != nil {
-		ws.errorHandler(data)
+		ws.errorHandler(err)
 	}
 }
 
@@ -107,8 +106,12 @@ func (ws *WebsocketClient) getAddress() string {
 Close - closing connection
 */
 func (ws *WebsocketClient) Close() error {
-	return ws.Conn.WriteMessage(
-		websocket.CloseMessage,
-		websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
-	)
+	fmt.Println("[WS][CLIENT] Closing connection: ", ws.Conn)
+	if ws.Conn != nil {
+		return ws.Conn.WriteMessage(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
+		)
+	}
+	return nil
 }

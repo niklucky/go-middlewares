@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"encoding/json"
+	"log"
 	"strconv"
 
 	"github.com/streadway/amqp"
@@ -17,6 +18,7 @@ type RabbitMQ struct {
 	Conn     *amqp.Connection
 	Channel  *amqp.Channel
 	Exchange MQExchange
+	handler  func([]byte)
 }
 
 // MQExchange - setting for MQ exchange
@@ -88,10 +90,14 @@ func (r *RabbitMQ) Publish(data interface{}) error {
 		})
 }
 
+func (r *RabbitMQ) AddConsumer(h func([]byte)) {
+	r.handler = h
+}
+
 /*
 Consume - declaring queue, binding to Exchange and starting to consume (listen) messages
 */
-func (r *RabbitMQ) Consume(handler func(interface{})) error {
+func (r *RabbitMQ) Consume() error {
 	if r.isConnected() == false {
 		err := r.connect()
 		if err != nil {
@@ -100,7 +106,7 @@ func (r *RabbitMQ) Consume(handler func(interface{})) error {
 	}
 	q, err := r.Channel.QueueDeclare(
 		r.Exchange.QueueName,
-		r.Exchange.Durable,
+		false,
 		false, // delete when usused
 		true,  // exclusive
 		r.Exchange.NoWait,
@@ -134,12 +140,14 @@ func (r *RabbitMQ) Consume(handler func(interface{})) error {
 
 	go func() {
 		for d := range msgs {
-			handler(d.Body)
-			d.Ack(false)
+			if r.handler != nil {
+				r.handler(d.Body)
+			}
 		}
 	}()
 
 	<-forever
+	log.Println("Closing")
 	r.Close()
 	return nil
 }

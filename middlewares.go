@@ -2,6 +2,9 @@ package middlewares
 
 import (
 	"log"
+	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 /*
@@ -20,6 +23,20 @@ NewWebsocketClient - constructor for WebsocketClient
 func NewWebsocketClient(host Host) WebsocketClient {
 	return WebsocketClient{
 		Host: host,
+	}
+}
+
+/*
+NewWebsocketServer - Server constructor
+*/
+func NewWebsocketServer(host string, port int, timeout int) WebsocketServer {
+	t := time.Duration(timeout) * time.Second
+	return WebsocketServer{
+		Host:          host,
+		Port:          port,
+		Timeout:       t,
+		Connections:   make(map[string]*websocket.Conn),
+		Subscriptions: make(map[string]map[string]time.Time),
 	}
 }
 

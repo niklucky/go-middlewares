@@ -98,6 +98,34 @@ func (ws *WebsocketServer) Subscribe(channel, connectionID string) {
 	fmt.Println("Len: ", len(ws.Subscriptions))
 	ws.mutex.Unlock()
 }
+func (ws *WebsocketServer) Unsubscribe(channel, connectionID string) {
+	ws.mutex.Lock()
+	fmt.Println("=========== Subscribe: before ===========")
+	fmt.Println("Subscriptions: ", ws.Subscriptions)
+	fmt.Println("Channel: ", ws.Subscriptions[channel])
+	fmt.Println("Len: ", len(ws.Subscriptions))
+	ch := ws.Subscriptions[channel]
+
+	if ch == nil {
+		return
+	}
+	delete(ws.Subscriptions[channel], connectionID)
+	fmt.Println("=========== Subscribe: after ===========")
+	fmt.Println("Subscriptions: ", ws.Subscriptions)
+	fmt.Println("Channel: ", ws.Subscriptions[channel])
+	fmt.Println("Len: ", len(ws.Subscriptions))
+	ws.mutex.Unlock()
+}
+
+func (ws *WebsocketServer) Broadcast(ch string, data interface{}) {
+	subs := ws.Subscriptions[ch]
+	if subs == nil {
+		return
+	}
+	for connID := range subs {
+		ws.Send(connID, data)
+	}
+}
 
 /*
 Send - sending message (interface{}) to connectionID

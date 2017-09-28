@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"strconv"
 
@@ -34,6 +35,7 @@ type MQExchange struct {
 
 // Connecting to Exchange
 func (r *RabbitMQ) connect() error {
+	fmt.Println("[LOG][MQ] Connecting to; ", r.getAddressString())
 	conn, err := amqp.Dial(r.getAddressString())
 	if err != nil {
 		logOnError(err, "Dial")

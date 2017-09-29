@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"sync"
+	"time"
 
 	"github.com/streadway/amqp"
 )
@@ -16,10 +18,12 @@ Send events to Exchange
 */
 type RabbitMQ struct {
 	Host
+	State    string
 	Conn     *amqp.Connection
 	Channel  *amqp.Channel
 	Exchange MQExchange
 	handler  func([]byte)
+	m        sync.Mutex
 }
 
 // MQExchange - setting for MQ exchange
@@ -35,6 +39,14 @@ type MQExchange struct {
 
 // Connecting to Exchange
 func (r *RabbitMQ) connect() error {
+	r.m.Lock()
+	if r.State == "CONNECTING" {
+		time.Sleep(1 * time.Second)
+	}
+	if r.State == "CONNECTED" {
+		return nil
+	}
+	r.State = "CONNECTING"
 	fmt.Println("[LOG][MQ] Connecting to; ", r.getAddressString())
 	conn, err := amqp.Dial(r.getAddressString())
 	if err != nil {
@@ -47,6 +59,8 @@ func (r *RabbitMQ) connect() error {
 		return err
 	}
 	r.Channel = ch
+	r.State = "CONNECTED"
+	r.m.Unlock()
 	return ch.ExchangeDeclare(
 		r.Exchange.Name,
 		r.Exchange.Type,

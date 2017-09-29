@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -65,7 +64,7 @@ func (ws *WebsocketClient) Listen() {
 		for {
 			var message interface{}
 			err := ws.Conn.ReadJSON(&message)
-			fmt.Println("New message: ", time.Now())
+
 			if err != nil {
 				go ws.handleError(err)
 				return

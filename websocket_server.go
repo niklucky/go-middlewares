@@ -69,12 +69,14 @@ func (ws *WebsocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 		// fmt.Println("New message: ", connectionID, message)
 
 		onMessage := ws.onMessageHandler[route]
-		response, err := onMessage(connectionID, message)
-		if err != nil {
-			ws.handleError(ws.SendErrror(c, err.Error(), err))
-			continue
+		if onMessage != nil {
+			response, err := onMessage(connectionID, message)
+			if err != nil {
+				ws.handleError(ws.SendErrror(c, err.Error(), err))
+				continue
+			}
+			err = ws.SendResponse(c, mt, "data", response)
 		}
-		err = ws.SendResponse(c, mt, "data", response)
 	}
 }
 

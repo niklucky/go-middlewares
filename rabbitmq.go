@@ -47,7 +47,7 @@ func (r *RabbitMQ) connect() error {
 		return nil
 	}
 	r.State = "CONNECTING"
-	fmt.Println("[LOG][MQ] Connecting to; ", r.getAddressString())
+	fmt.Println("[LOG][MQ] Connecting to: ", r.getAddressString())
 	conn, err := amqp.Dial(r.getAddressString())
 	if err != nil {
 		logOnError(err, "Dial")
@@ -60,8 +60,7 @@ func (r *RabbitMQ) connect() error {
 	}
 	r.Channel = ch
 	r.State = "CONNECTED"
-	r.m.Unlock()
-	return ch.ExchangeDeclare(
+	err = ch.ExchangeDeclare(
 		r.Exchange.Name,
 		r.Exchange.Type,
 		r.Exchange.Durable,
@@ -70,6 +69,12 @@ func (r *RabbitMQ) connect() error {
 		r.Exchange.NoWait,
 		nil, // arguments
 	)
+	r.m.Unlock()
+	if err != nil {
+		fmt.Println("[ERROR][MQ] Error in ExchangeDeclare: ", err)
+	}
+	fmt.Println("[LOG][MQ] Connected to: ", r.getAddressString())
+	return err
 }
 
 /*

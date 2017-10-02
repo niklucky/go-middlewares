@@ -120,6 +120,8 @@ func (ws *WebsocketServer) Unsubscribe(channel, connectionID string) {
 }
 
 func (ws *WebsocketServer) Broadcast(ch string, data interface{}) {
+	fmt.Println("[WS][Broadcast] Channel: ", ch)
+	fmt.Println("[WS][Broadcast] Subscriptions: ", ws.Subscriptions[ch])
 	subs := ws.Subscriptions[ch]
 	if subs == nil {
 		return

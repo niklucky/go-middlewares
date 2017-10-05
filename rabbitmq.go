@@ -11,6 +11,11 @@ import (
 	"github.com/streadway/amqp"
 )
 
+const (
+	statusConnecting = "CONNECTING"
+	statusConnected  = "CONNECTED"
+)
+
 /*
 RabbitMQ - middleware for Rabbit MQ AMQP queue manager
 Connects to Exchange and listens to Events
@@ -37,16 +42,16 @@ type MQExchange struct {
 	NoWait      bool
 }
 
-// Connecting to Exchange
-func (r *RabbitMQ) connect() error {
+// Connect - Connecting to Exchange
+func (r *RabbitMQ) Connect() error {
 	r.m.Lock()
-	if r.State == "CONNECTING" {
+	if r.State == statusConnecting {
 		time.Sleep(1 * time.Second)
 	}
-	if r.State == "CONNECTED" {
+	if r.State == statusConnecting {
 		return nil
 	}
-	r.State = "CONNECTING"
+	r.State = statusConnecting
 	fmt.Println("[LOG][MQ] Connecting to: ", r.getAddressString())
 	conn, err := amqp.Dial(r.getAddressString())
 	if err != nil {
@@ -59,7 +64,7 @@ func (r *RabbitMQ) connect() error {
 		return err
 	}
 	r.Channel = ch
-	r.State = "CONNECTED"
+	r.State = statusConnecting
 	err = ch.ExchangeDeclare(
 		r.Exchange.Name,
 		r.Exchange.Type,
@@ -91,7 +96,7 @@ Publish — publishing message to RabbitMQ exchange
 */
 func (r *RabbitMQ) Publish(data interface{}) error {
 	if r.isConnected() == false {
-		err := r.connect()
+		err := r.Connect()
 		if err != nil {
 			return err
 		}
@@ -120,7 +125,7 @@ Consume - declaring queue, binding to Exchange and starting to consume (listen) 
 */
 func (r *RabbitMQ) Consume() error {
 	if r.isConnected() == false {
-		err := r.connect()
+		err := r.Connect()
 		if err != nil {
 			return err
 		}

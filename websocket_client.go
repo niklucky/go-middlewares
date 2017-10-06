@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -49,6 +50,7 @@ func (ws *WebsocketClient) Connect() error {
 	if err != nil {
 		return err
 	}
+	log.Println("[WS] Connected to server")
 	return nil
 }
 
@@ -59,10 +61,19 @@ func (ws *WebsocketClient) Listen() {
 	if ws.Conn == nil {
 		ws.Connect()
 	}
+	pongWait := 5 * time.Second
+	ws.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	ws.Conn.SetPongHandler(func(string) error {
+		ws.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+	go ws.checkConnection()
 	go func() {
 		defer ws.Conn.Close()
 		for {
 			var message interface{}
+			// t, m, err := ws.Conn.ReadMessage()
+			// fmt.Println(t, m, err)
 			err := ws.Conn.ReadJSON(&message)
 
 			if err != nil {
@@ -74,13 +85,25 @@ func (ws *WebsocketClient) Listen() {
 	}()
 }
 
+func (ws *WebsocketClient) checkConnection() {
+	for {
+		defer ws.Conn.Close()
+		err := ws.Conn.WriteMessage(websocket.PingMessage, []byte("PING"))
+		if err != nil {
+			log.Println("[ERROR][WS] Sending ping: ", err)
+			return
+		}
+		time.Sleep(5 * time.Second)
+	}
+}
+
 func (ws *WebsocketClient) handleData(data interface{}) {
 	if ws.dataHandler != nil {
 		ws.dataHandler(data)
 	}
 }
 func (ws *WebsocketClient) handleError(err interface{}) {
-	log.Println("Read error:", err)
+	log.Println("[ERROR][WS] Read error:", err)
 	if ws.errorHandler != nil {
 		ws.errorHandler(err)
 	}
@@ -105,7 +128,7 @@ func (ws *WebsocketClient) getAddress() string {
 Close - closing connection
 */
 func (ws *WebsocketClient) Close() error {
-	fmt.Println("[WS][CLIENT] Closing connection: ", ws.Conn)
+	fmt.Println("[WS][CLIENT] Closing connection")
 	if ws.Conn != nil {
 		return ws.Conn.WriteMessage(
 			websocket.CloseMessage,

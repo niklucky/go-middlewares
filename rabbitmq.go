@@ -29,6 +29,7 @@ type RabbitMQ struct {
 	Exchange MQExchange
 	handler  func([]byte)
 	m        sync.Mutex
+	Debug    bool
 }
 
 // MQExchange - setting for MQ exchange
@@ -105,6 +106,9 @@ func (r *RabbitMQ) Publish(data interface{}) error {
 	if err != nil {
 		return err
 	}
+	if r.Debug {
+		fmt.Println("[DEBUG] Message: ", string(body))
+	}
 	return r.Channel.Publish(
 		r.Exchange.Name,
 		r.Exchange.RoutingKey,
@@ -112,7 +116,7 @@ func (r *RabbitMQ) Publish(data interface{}) error {
 		false, // immediate
 		amqp.Publishing{
 			ContentType: "text/plain",
-			Body:        []byte(body),
+			Body:        body,
 		})
 }
 

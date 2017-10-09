@@ -38,6 +38,7 @@ type WebsocketServer struct {
 
 	NewConnectionMessage string
 	mutex                sync.Mutex
+	Debug                bool
 }
 
 func (ws *WebsocketServer) Handler(w http.ResponseWriter, r *http.Request) {
@@ -102,26 +103,32 @@ func (ws *WebsocketServer) Subscribe(channel, connectionID string) {
 }
 func (ws *WebsocketServer) Unsubscribe(channel, connectionID string) {
 	ws.mutex.Lock()
-	fmt.Println("=========== Subscribe: before ===========")
-	fmt.Println("Subscriptions: ", ws.Subscriptions)
-	fmt.Println("Channel: ", ws.Subscriptions[channel])
-	fmt.Println("Len: ", len(ws.Subscriptions))
+	if ws.Debug == true {
+		fmt.Println("=========== Subscribe: before ===========")
+		fmt.Println("Subscriptions: ", ws.Subscriptions)
+		fmt.Println("Channel: ", ws.Subscriptions[channel])
+		fmt.Println("Len: ", len(ws.Subscriptions))
+	}
 	ch := ws.Subscriptions[channel]
 
 	if ch == nil {
 		return
 	}
 	delete(ws.Subscriptions[channel], connectionID)
-	fmt.Println("=========== Subscribe: after ===========")
-	fmt.Println("Subscriptions: ", ws.Subscriptions)
-	fmt.Println("Channel: ", ws.Subscriptions[channel])
-	fmt.Println("Len: ", len(ws.Subscriptions))
+	if ws.Debug == true {
+		fmt.Println("=========== Subscribe: after ===========")
+		fmt.Println("Subscriptions: ", ws.Subscriptions)
+		fmt.Println("Channel: ", ws.Subscriptions[channel])
+		fmt.Println("Len: ", len(ws.Subscriptions))
+	}
 	ws.mutex.Unlock()
 }
 
 func (ws *WebsocketServer) Broadcast(ch string, data interface{}) {
-	fmt.Println("[WS][Broadcast] Channel: ", ch)
-	fmt.Println("[WS][Broadcast] Subscriptions: ", ws.Subscriptions[ch])
+	if ws.Debug == true {
+		fmt.Println("[WS][Broadcast] Channel: ", ch)
+		fmt.Println("[WS][Broadcast] Subscriptions: ", ws.Subscriptions[ch])
+	}
 	subs := ws.Subscriptions[ch]
 	if subs == nil {
 		return

@@ -27,7 +27,7 @@ type RabbitMQ struct {
 	Conn     *amqp.Connection
 	Channel  *amqp.Channel
 	Exchange MQExchange
-	handler  func([]byte)
+	handler  func([]byte) error
 	m        sync.Mutex
 	Debug    bool
 }
@@ -120,7 +120,7 @@ func (r *RabbitMQ) Publish(data interface{}) error {
 		})
 }
 
-func (r *RabbitMQ) AddConsumer(h func([]byte)) {
+func (r *RabbitMQ) AddConsumer(h func([]byte) error) {
 	r.handler = h
 }
 
@@ -170,8 +170,12 @@ func (r *RabbitMQ) Consume() error {
 
 	go func() {
 		for d := range msgs {
+			var err error
 			if r.handler != nil {
-				r.handler(d.Body)
+				err = r.handler(d.Body)
+			}
+			if err != nil {
+				d.Ack(false)
 			}
 		}
 	}()

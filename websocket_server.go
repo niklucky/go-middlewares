@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,7 +20,8 @@ import (
 /*
 DataHandler - incoming request data handler
 */
-type DataHandler func(string, interface{}) (interface{}, error)
+type MessageHandler func(string, []byte) (interface{}, error)
+type ConnectionHandler func(string, url.Values) (interface{}, error)
 
 /*
 WebsocketServer - websocket server
@@ -32,9 +34,9 @@ type WebsocketServer struct {
 	Connections   map[string]*websocket.Conn
 	Subscriptions map[string]map[string]time.Time
 
-	onConnectHandler    map[string]DataHandler
-	onDisconnectHandler map[string]DataHandler
-	onMessageHandler    map[string]DataHandler
+	onConnectHandler    map[string]ConnectionHandler
+	onDisconnectHandler map[string]ConnectionHandler
+	onMessageHandler    map[string]MessageHandler
 
 	NewConnectionMessage string
 	mutex                sync.Mutex
@@ -44,7 +46,6 @@ type WebsocketServer struct {
 func (ws *WebsocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.String()
 	fmt.Println("New request", url)
-	// query := r.URL.Query()
 
 	segments := strings.Split(url, "?")
 	route := segments[0]
@@ -54,7 +55,7 @@ func (ws *WebsocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 		ws.handleError(err)
 		return
 	}
-	connectionID, err := ws.newConnection(route, c)
+	connectionID, err := ws.newConnection(route, c, r.URL.Query())
 	defer func() {
 		fmt.Println("Disconnect: ", connectionID)
 		ws.destroyConnection(connectionID)
@@ -76,9 +77,21 @@ func (ws *WebsocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 				ws.handleError(ws.SendErrror(c, err.Error(), err))
 				continue
 			}
-			err = ws.SendResponse(c, mt, "data", response)
+			if response != nil {
+				err = ws.SendResponse(c, mt, response)
+				if err != nil {
+					fmt.Println("[WS][ERROR] Sending: ", err)
+				}
+			}
 		}
 	}
+}
+
+func (ws *WebsocketServer) Disconnect(ID string, err error) {
+	c := ws.Connections[ID]
+	ws.SendErrror(c, err.Error(), err)
+	ws.destroyConnection(ID)
+	c.Close()
 }
 
 func (ws *WebsocketServer) Subscribe(channel, connectionID string) {
@@ -148,7 +161,7 @@ func (ws *WebsocketServer) Send(connectionID string, message interface{}) {
 	}
 }
 
-func (ws *WebsocketServer) newConnection(route string, c *websocket.Conn) (string, error) {
+func (ws *WebsocketServer) newConnection(route string, c *websocket.Conn, q url.Values) (string, error) {
 	uid, err := uuid.NewV4()
 	if err != nil {
 		return "", err
@@ -165,7 +178,7 @@ func (ws *WebsocketServer) newConnection(route string, c *websocket.Conn) (strin
 		return ID, nil
 	}
 
-	resp, err := onConnect(ID, nil)
+	resp, err := onConnect(ID, q)
 	if err != nil {
 		ws.SendErrror(c, "onConnect error", err)
 	}
@@ -186,21 +199,21 @@ func (ws *WebsocketServer) destroyConnection(ID string) error {
 	return nil
 }
 
-func (ws *WebsocketServer) OnConnect(route string, handler DataHandler) {
+func (ws *WebsocketServer) OnConnect(route string, handler ConnectionHandler) {
 	if ws.onConnectHandler == nil {
-		ws.onConnectHandler = make(map[string]DataHandler)
+		ws.onConnectHandler = make(map[string]ConnectionHandler)
 	}
 	ws.onConnectHandler[route] = handler
 }
-func (ws *WebsocketServer) OnDisconnect(route string, handler DataHandler) {
+func (ws *WebsocketServer) OnDisconnect(route string, handler ConnectionHandler) {
 	if ws.onDisconnectHandler == nil {
-		ws.onDisconnectHandler = make(map[string]DataHandler)
+		ws.onDisconnectHandler = make(map[string]ConnectionHandler)
 	}
 	ws.onDisconnectHandler[route] = handler
 }
-func (ws *WebsocketServer) OnMessage(route string, handler DataHandler) {
+func (ws *WebsocketServer) OnMessage(route string, handler MessageHandler) {
 	if ws.onMessageHandler == nil {
-		ws.onMessageHandler = make(map[string]DataHandler)
+		ws.onMessageHandler = make(map[string]MessageHandler)
 	}
 	ws.onMessageHandler[route] = handler
 }
@@ -209,13 +222,13 @@ func (ws *WebsocketServer) SendErrror(c *websocket.Conn, message string, err err
 	resp := make(map[string]string)
 	resp["message"] = message
 	resp["stack"] = err.Error()
-	return ws.SendResponse(c, websocket.TextMessage, "error", resp)
+	return ws.SendResponse(c, websocket.TextMessage, resp)
 }
 func (ws *WebsocketServer) SendText(c *websocket.Conn, data interface{}) error {
 	if err := checkConnection(c); err != nil {
 		return err
 	}
-	return ws.SendResponse(c, websocket.TextMessage, "data", data)
+	return ws.SendResponse(c, websocket.TextMessage, data)
 }
 
 func checkConnection(c *websocket.Conn) error {
@@ -226,13 +239,11 @@ func checkConnection(c *websocket.Conn) error {
 	return nil
 }
 
-func (ws *WebsocketServer) SendResponse(c *websocket.Conn, mt int, t string, data interface{}) error {
+func (ws *WebsocketServer) SendResponse(c *websocket.Conn, mt int, data interface{}) error {
 	if err := checkConnection(c); err != nil {
 		return err
 	}
-	d := make(map[string]interface{})
-	d[t] = data
-	message, err := json.Marshal(d)
+	message, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}

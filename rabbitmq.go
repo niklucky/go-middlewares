@@ -95,7 +95,7 @@ func max(x, y int) int {
 /*
 Close - closing connections
 */
-func GetConnectedMQ(host Host, ex MQExchange) (RabbitMQ, error) {
+func GetConnectedMQ(host Host, ex MQExchange, h func([]byte) error) (RabbitMQ, error) {
 	rmq := RabbitMQ{
 		Host:     host,
 		Exchange: ex,
@@ -113,6 +113,8 @@ func GetConnectedMQ(host Host, ex MQExchange) (RabbitMQ, error) {
 			break
 		}
 	}
+
+	rmq.handler = h
 	return rmq, err
 }
 

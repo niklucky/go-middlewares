@@ -85,6 +85,37 @@ func (r *RabbitMQ) Connect() error {
 	return err
 }
 
+func max(x, y int) int {
+	if x > y {
+		return x
+	}
+	return y
+}
+
+/*
+Close - closing connections
+*/
+func GetConnectedMQ(host Host, ex MQExchange) (RabbitMQ, error) {
+	rmq := RabbitMQ{
+		Host:     host,
+		Exchange: ex,
+	}
+
+	var err error
+	for i := 0; i < max(1, host.Reconnect); i++ {
+		err = rmq.Connect()
+		if err != nil {
+			logOnError(err, "GetConnectedMQ() error. Reconnecting...")
+			if host.Reconnect > 0 {
+				time.Sleep(time.Duration(max(1, host.Delay)) * time.Second)
+			}
+		} else {
+			break
+		}
+	}
+	return rmq, err
+}
+
 /*
 Close - closing connections
 */
@@ -144,7 +175,9 @@ func (r *RabbitMQ) Consume() error {
 		r.Exchange.NoWait,
 		nil, // arguments
 	)
-
+	if err != nil {
+		return err
+	}
 	err = r.Channel.QueueBind(
 		q.Name,                // queue name
 		r.Exchange.RoutingKey, // routing key
@@ -168,7 +201,7 @@ func (r *RabbitMQ) Consume() error {
 		return err
 	}
 
-	forever := make(chan bool)
+	//	forever := make(chan bool)
 
 	go func() {
 		for d := range msgs {
@@ -182,9 +215,10 @@ func (r *RabbitMQ) Consume() error {
 		}
 	}()
 
-	<-forever
-	log.Println("Closing")
-	r.Close()
+	//	<-forever
+	log.Println("Consuming...")
+	//	log.Println("Closing")
+	//	r.Close()
 	return nil
 }
 

@@ -54,7 +54,7 @@ func (r *RabbitMQ) Connect() error {
 		return nil
 	}
 	r.State = statusConnecting
-	fmt.Println("[LOG][MQ] Connecting to: ", r.getAddressString())
+	fmt.Println("[LOG][MQ] Connecting to: ", r.getInfo())
 	conn, err := amqp.Dial(r.getAddressString())
 	if err != nil {
 		logOnError(err, "Dial")
@@ -81,7 +81,7 @@ func (r *RabbitMQ) Connect() error {
 	if err != nil {
 		fmt.Println("[ERROR][MQ] Error in ExchangeDeclare: ", err)
 	}
-	fmt.Println("[LOG][MQ] Connected to: ", r.getAddressString())
+	fmt.Println("[LOG][MQ] Connected to: ", r.getInfo())
 	return err
 }
 
@@ -93,7 +93,7 @@ func max(x, y int) int {
 }
 
 /*
-Close - closing connections
+GetConnectedMQ - closing connections
 */
 func GetConnectedMQ(host Host, ex MQExchange, h func([]byte) error) (RabbitMQ, error) {
 	rmq := RabbitMQ{
@@ -225,6 +225,9 @@ func (r *RabbitMQ) Consume() error {
 
 func (r *RabbitMQ) getAddressString() string {
 	return "amqp://" + r.Host.User + ":" + r.Host.Password + "@" + r.Host.Host + ":" + strconv.Itoa(r.Host.Port)
+}
+func (r *RabbitMQ) getInfo() string {
+	return "amqp://" + r.Host.User + ":***@" + r.Host.Host + ":" + strconv.Itoa(r.Host.Port) + " | " + r.Exchange.Name
 }
 
 func (r *RabbitMQ) isConnected() bool {

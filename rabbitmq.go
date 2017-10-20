@@ -99,6 +99,7 @@ func GetConnectedMQ(host Host, ex MQExchange, h func([]byte) error) (RabbitMQ, e
 	rmq := RabbitMQ{
 		Host:     host,
 		Exchange: ex,
+		handler:  h,
 	}
 
 	var err error
@@ -113,8 +114,6 @@ func GetConnectedMQ(host Host, ex MQExchange, h func([]byte) error) (RabbitMQ, e
 			break
 		}
 	}
-
-	rmq.handler = h
 	return rmq, err
 }
 

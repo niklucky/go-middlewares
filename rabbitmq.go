@@ -46,6 +46,7 @@ type MQExchange struct {
 // Connect - Connecting to Exchange
 func (r *RabbitMQ) Connect() error {
 	r.m.Lock()
+	defer r.m.Unlock()
 	if r.State == statusConnecting {
 		time.Sleep(1 * time.Second)
 	}
@@ -57,6 +58,7 @@ func (r *RabbitMQ) Connect() error {
 	conn, err := amqp.Dial(r.getAddressString())
 	if err != nil {
 		logOnError(err, "Dial")
+		r.State = ""
 		return err
 	}
 	r.Conn = conn
@@ -75,12 +77,44 @@ func (r *RabbitMQ) Connect() error {
 		r.Exchange.NoWait,
 		nil, // arguments
 	)
-	r.m.Unlock()
+
 	if err != nil {
 		fmt.Println("[ERROR][MQ] Error in ExchangeDeclare: ", err)
 	}
 	fmt.Println("[LOG][MQ] Connected to: ", r.getAddressString())
 	return err
+}
+
+func max(x, y int) int {
+	if x > y {
+		return x
+	}
+	return y
+}
+
+/*
+Close - closing connections
+*/
+func GetConnectedMQ(host Host, ex MQExchange, h func([]byte) error) (RabbitMQ, error) {
+	rmq := RabbitMQ{
+		Host:     host,
+		Exchange: ex,
+		handler:  h,
+	}
+
+	var err error
+	for i := 0; i < max(1, host.Reconnect); i++ {
+		err = rmq.Connect()
+		if err != nil {
+			logOnError(err, "GetConnectedMQ() error. Reconnecting...")
+			if host.Reconnect > 0 {
+				time.Sleep(time.Duration(max(1, host.Delay)) * time.Second)
+			}
+		} else {
+			break
+		}
+	}
+	return rmq, err
 }
 
 /*
@@ -142,7 +176,9 @@ func (r *RabbitMQ) Consume() error {
 		r.Exchange.NoWait,
 		nil, // arguments
 	)
-
+	if err != nil {
+		return err
+	}
 	err = r.Channel.QueueBind(
 		q.Name,                // queue name
 		r.Exchange.RoutingKey, // routing key
@@ -166,7 +202,7 @@ func (r *RabbitMQ) Consume() error {
 		return err
 	}
 
-	forever := make(chan bool)
+	//	forever := make(chan bool)
 
 	go func() {
 		for d := range msgs {
@@ -180,9 +216,10 @@ func (r *RabbitMQ) Consume() error {
 		}
 	}()
 
-	<-forever
-	log.Println("Closing")
-	r.Close()
+	//	<-forever
+	log.Println("Consuming...")
+	//	log.Println("Closing")
+	//	r.Close()
 	return nil
 }
 

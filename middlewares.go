@@ -48,6 +48,8 @@ type Host struct {
 	Password string
 	Path     string
 	Data     interface{}
+	Reconnect int
+	Delay     int	
 }
 
 func logOnError(err error, msg string) {

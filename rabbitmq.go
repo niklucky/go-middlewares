@@ -46,6 +46,7 @@ type MQExchange struct {
 // Connect - Connecting to Exchange
 func (r *RabbitMQ) Connect() error {
 	r.m.Lock()
+	defer r.m.Unlock()
 	if r.State == statusConnecting {
 		time.Sleep(1 * time.Second)
 	}
@@ -57,6 +58,7 @@ func (r *RabbitMQ) Connect() error {
 	conn, err := amqp.Dial(r.getAddressString())
 	if err != nil {
 		logOnError(err, "Dial")
+		r.State = ""
 		return err
 	}
 	r.Conn = conn
@@ -75,7 +77,7 @@ func (r *RabbitMQ) Connect() error {
 		r.Exchange.NoWait,
 		nil, // arguments
 	)
-	r.m.Unlock()
+
 	if err != nil {
 		fmt.Println("[ERROR][MQ] Error in ExchangeDeclare: ", err)
 	}

@@ -152,6 +152,25 @@ func (ws *WebsocketServer) Broadcast(ch string, data interface{}) {
 }
 
 /*
+BroadcastExcept - broadcasting to channel except connection (id)
+*/
+func (ws *WebsocketServer) BroadcastExcept(ch string, cid string, data interface{}) {
+	if ws.Debug == true {
+		fmt.Println("[WS][Broadcast] Channel: ", ch)
+		fmt.Println("[WS][Broadcast] Subscriptions: ", ws.Subscriptions[ch])
+	}
+	subs := ws.Subscriptions[ch]
+	if subs == nil {
+		return
+	}
+	for connID := range subs {
+		if connID != cid {
+			ws.Send(connID, data)
+		}
+	}
+}
+
+/*
 Send - sending message (interface{}) to connectionID
 */
 func (ws *WebsocketServer) Send(connectionID string, message interface{}) {

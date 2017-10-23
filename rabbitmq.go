@@ -34,13 +34,18 @@ type RabbitMQ struct {
 
 // MQExchange - setting for MQ exchange
 type MQExchange struct {
-	Name        string
-	Type        string
-	RoutingKey  string
-	QueueName   string
-	Durable     bool
-	AutoDeleted bool
-	NoWait      bool
+	Name         string
+	Type         string
+	RoutingKey   string
+	QueueName    string
+	Durable      bool
+	AutoDeleted  bool
+	NoWait       bool
+	Q_Durable    bool
+	Q_AutoDelete bool
+	Q_Exclusive  bool
+	C_AutoAck    bool
+	C_Exclusive  bool
 }
 
 // Connect - Connecting to Exchange
@@ -170,15 +175,16 @@ func (r *RabbitMQ) Consume() error {
 	}
 	q, err := r.Channel.QueueDeclare(
 		r.Exchange.QueueName,
-		false,
-		false, // delete when usused
-		true,  // exclusive
+		r.Exchange.Q_Durable,
+		r.Exchange.Q_AutoDelete,
+		r.Exchange.Q_Exclusive,
 		r.Exchange.NoWait,
 		nil, // arguments
 	)
 	if err != nil {
 		return err
 	}
+
 	err = r.Channel.QueueBind(
 		q.Name,                // queue name
 		r.Exchange.RoutingKey, // routing key
@@ -190,19 +196,17 @@ func (r *RabbitMQ) Consume() error {
 	}
 
 	msgs, err := r.Channel.Consume(
-		q.Name, // queue
-		"",     // consumer
-		true,   // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
+		q.Name,                 // queue
+		"",                     // consumer
+		r.Exchange.C_AutoAck,   // auto-ack
+		r.Exchange.C_Exclusive, // exclusive
+		false, // no-local
+		false, // no-wait
+		nil,   // args
 	)
 	if err != nil {
 		return err
 	}
-
-	//	forever := make(chan bool)
 
 	go func() {
 		for d := range msgs {
@@ -216,7 +220,6 @@ func (r *RabbitMQ) Consume() error {
 		}
 	}()
 
-	//	<-forever
 	log.Println("Consuming...")
 	//	log.Println("Closing")
 	//	r.Close()

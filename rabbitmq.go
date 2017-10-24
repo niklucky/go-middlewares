@@ -214,8 +214,10 @@ func (r *RabbitMQ) Consume() error {
 			if r.handler != nil {
 				err = r.handler(d.Body)
 			}
-			if err != nil {
-				d.Ack(false)
+			if r.Exchange.C_AutoAck == false {
+				if err == nil {
+					d.Ack(false)
+				}
 			}
 		}
 	}()

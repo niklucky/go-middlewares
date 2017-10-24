@@ -36,10 +36,10 @@ type RabbitMQ struct {
 type MQExchange struct {
 	Name         string
 	Type         string
-	RoutingKey   string
-	QueueName    string
+	RoutingKey   string `json:"routing_key"`
+	QueueName    string `json:"queue_name"`
 	Durable      bool
-	AutoDeleted  bool
+	AutoDeleted  bool `json:"auto_deleted"`
 	NoWait       bool
 	Q_Durable    bool
 	Q_AutoDelete bool

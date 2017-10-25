@@ -129,7 +129,7 @@ func GetConnectedMQ(host Host, ex MQExchange, hd func([]byte) error) (rmq Rabbit
 	}
 
 	if len(ex.QueueName) > 0 {
-		rmq.Queue, err = rmq.QueueBind()
+		rmq.Queue, err = rmq.QueueInit()
 	}
 	return rmq, err
 }

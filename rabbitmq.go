@@ -16,6 +16,13 @@ const (
 	statusConnected  = "CONNECTED"
 )
 
+type RabbitMQEvent int
+
+const (
+	RMQDisconnected RabbitMQEvent = iota
+	RMQError
+)
+
 /*
 RabbitMQ - middleware for Rabbit MQ AMQP queue manager
 Connects to Exchange and listens to Events
@@ -27,7 +34,9 @@ type RabbitMQ struct {
 	Conn     *amqp.Connection
 	Channel  *amqp.Channel
 	Exchange MQExchange
-	handler  func([]byte) error
+	Queue    amqp.Queue
+	hData    func([]byte) error
+	hEvent   func(RabbitMQEvent, interface{}) error
 	m        sync.Mutex
 	Debug    bool
 }
@@ -100,14 +109,13 @@ func max(x, y int) int {
 /*
 GetConnectedMQ - closing connections
 */
-func GetConnectedMQ(host Host, ex MQExchange, h func([]byte) error) (RabbitMQ, error) {
-	rmq := RabbitMQ{
+func GetConnectedMQ(host Host, ex MQExchange, hd func([]byte) error) (rmq RabbitMQ, err error) {
+	rmq = RabbitMQ{
 		Host:     host,
 		Exchange: ex,
-		handler:  h,
+		hData:    hd,
 	}
 
-	var err error
 	for i := 0; i < max(1, host.Reconnect); i++ {
 		err = rmq.Connect()
 		if err != nil {
@@ -118,6 +126,10 @@ func GetConnectedMQ(host Host, ex MQExchange, h func([]byte) error) (RabbitMQ, e
 		} else {
 			break
 		}
+	}
+
+	if len(ex.QueueName) > 0 {
+		rmq.Queue, err = rmq.QueueBind()
 	}
 	return rmq, err
 }
@@ -160,20 +172,22 @@ func (r *RabbitMQ) Publish(data interface{}) error {
 }
 
 func (r *RabbitMQ) AddConsumer(h func([]byte) error) {
-	r.handler = h
+	r.hData = h
 }
 
-/*
-Consume - declaring queue, binding to Exchange and starting to consume (listen) messages
-*/
-func (r *RabbitMQ) Consume() error {
+func (r *RabbitMQ) AddNotifyer(h func(RabbitMQEvent, interface{}) error) {
+	r.hEvent = h
+}
+
+func (r *RabbitMQ) QueueBind() (q amqp.Queue, err error) {
 	if r.isConnected() == false {
-		err := r.Connect()
+		err = r.Connect()
 		if err != nil {
-			return err
+			return
 		}
 	}
-	q, err := r.Channel.QueueDeclare(
+
+	q, err = r.Channel.QueueDeclare(
 		r.Exchange.QueueName,
 		r.Exchange.Q_Durable,
 		r.Exchange.Q_AutoDelete,
@@ -182,7 +196,7 @@ func (r *RabbitMQ) Consume() error {
 		nil, // arguments
 	)
 	if err != nil {
-		return err
+		return
 	}
 
 	err = r.Channel.QueueBind(
@@ -191,12 +205,21 @@ func (r *RabbitMQ) Consume() error {
 		r.Exchange.Name,       // exchange
 		false,
 		nil)
+
+	return
+}
+
+/*
+Consume - declaring queue, binding to Exchange and starting to consume (listen) messages
+*/
+func (r *RabbitMQ) Consume() (err error) {
+	r.Queue, err = r.QueueBind()
 	if err != nil {
-		return err
+		return
 	}
 
 	msgs, err := r.Channel.Consume(
-		q.Name,                 // queue
+		r.Queue.Name,           // queue
 		"",                     // consumer
 		r.Exchange.C_AutoAck,   // auto-ack
 		r.Exchange.C_Exclusive, // exclusive
@@ -205,14 +228,14 @@ func (r *RabbitMQ) Consume() error {
 		nil,   // args
 	)
 	if err != nil {
-		return err
+		return
 	}
 
 	go func() {
 		for d := range msgs {
 			var err error
-			if r.handler != nil {
-				err = r.handler(d.Body)
+			if r.hData != nil {
+				err = r.hData(d.Body)
 			}
 			if r.Exchange.C_AutoAck == false {
 				if err == nil {
@@ -220,12 +243,13 @@ func (r *RabbitMQ) Consume() error {
 				}
 			}
 		}
+		if r.hEvent != nil {
+			r.hEvent(RMQDisconnected, nil)
+		}
 	}()
 
 	log.Println("Consuming...")
-	//	log.Println("Closing")
-	//	r.Close()
-	return nil
+	return
 }
 
 func (r *RabbitMQ) getAddressString() string {

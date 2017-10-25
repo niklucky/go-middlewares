@@ -244,7 +244,7 @@ func (r *RabbitMQ) Consume() (err error) {
 			}
 		}
 		if r.hEvent != nil {
-			r.hEvent(RMQDisconnected, nil)
+			r.hEvent(RMQDisconnected, r.Queue.Name)
 		}
 	}()
 

@@ -50,10 +50,10 @@ type MQExchange struct {
 	Durable      bool
 	AutoDeleted  bool `json:"auto_deleted"`
 	NoWait       bool
-	Q_Durable    bool
-	Q_AutoDelete bool
-	Q_Exclusive  bool
-	C_AutoAck    bool
+	Q_Durable    bool `json:"queue_durable"`
+	Q_AutoDelete bool `json:"queue_auto_delete"`
+	Q_Exclusive  bool `json:"queue_exclusive"`
+	C_AutoAck    bool `json:"queue_auto_ack"`
 	C_Exclusive  bool
 }
 
@@ -213,7 +213,7 @@ func (r *RabbitMQ) QueueInit() (q amqp.Queue, err error) {
 Consume - declaring queue, binding to Exchange and starting to consume (listen) messages
 */
 func (r *RabbitMQ) Consume() (err error) {
-	r.Queue, err = r.QueueBind()
+	r.Queue, err = r.QueueInit()
 	if err != nil {
 		return
 	}

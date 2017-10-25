@@ -179,7 +179,7 @@ func (r *RabbitMQ) AddNotifyer(h func(RabbitMQEvent, interface{}) error) {
 	r.hEvent = h
 }
 
-func (r *RabbitMQ) QueueBind() (q amqp.Queue, err error) {
+func (r *RabbitMQ) QueueInit() (q amqp.Queue, err error) {
 	if r.isConnected() == false {
 		err = r.Connect()
 		if err != nil {

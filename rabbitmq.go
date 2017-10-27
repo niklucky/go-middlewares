@@ -127,10 +127,6 @@ func GetConnectedMQ(host Host, ex MQExchange, hd func([]byte) error) (rmq Rabbit
 			break
 		}
 	}
-
-	if len(ex.QueueName) > 0 {
-		rmq.Queue, err = rmq.QueueInit()
-	}
 	return rmq, err
 }
 
@@ -248,7 +244,7 @@ func (r *RabbitMQ) Consume() (err error) {
 		}
 	}()
 
-	log.Println("Consuming...")
+	log.Println("Сonsuming: " + r.Queue.Name)
 	return
 }
 

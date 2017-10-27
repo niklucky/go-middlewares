@@ -109,8 +109,8 @@ func max(x, y int) int {
 /*
 GetConnectedMQ - closing connections
 */
-func GetConnectedMQ(host Host, ex MQExchange, hd func([]byte) error) (rmq RabbitMQ, err error) {
-	rmq = RabbitMQ{
+func GetConnectedMQ(host Host, ex MQExchange, hd func([]byte) error) (rmq *RabbitMQ, err error) {
+	rmq = &RabbitMQ{
 		Host:     host,
 		Exchange: ex,
 		hData:    hd,
@@ -126,6 +126,10 @@ func GetConnectedMQ(host Host, ex MQExchange, hd func([]byte) error) (rmq Rabbit
 		} else {
 			break
 		}
+	}
+
+	if len(ex.QueueName) > 0 {
+		rmq.Queue, err = rmq.QueueInit()
 	}
 	return rmq, err
 }
@@ -209,9 +213,11 @@ func (r *RabbitMQ) QueueInit() (q amqp.Queue, err error) {
 Consume - declaring queue, binding to Exchange and starting to consume (listen) messages
 */
 func (r *RabbitMQ) Consume() (err error) {
-	r.Queue, err = r.QueueInit()
-	if err != nil {
-		return
+	if len(r.Queue.Name) == 0 {
+		r.Queue, err = r.QueueInit()
+		if err != nil {
+			return
+		}
 	}
 
 	msgs, err := r.Channel.Consume(

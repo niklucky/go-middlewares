@@ -128,9 +128,7 @@ func GetConnectedMQ(host Host, ex MQExchange, hd func([]byte) error) (rmq *Rabbi
 		}
 	}
 
-	if len(ex.QueueName) > 0 {
-		rmq.Queue, err = rmq.QueueInit()
-	}
+	err = rmq.QueueInit()
 	return rmq, err
 }
 
@@ -179,7 +177,12 @@ func (r *RabbitMQ) AddNotifyer(h func(RabbitMQEvent, interface{}) error) {
 	r.hEvent = h
 }
 
-func (r *RabbitMQ) QueueInit() (q amqp.Queue, err error) {
+func (r *RabbitMQ) QueueInit() (err error) {
+	// if no queue_name in config or queue was already init -> exit
+	if len(r.Exchange.QueueName) == 0 || len(r.Queue.Name) > 0 {
+		return
+	}
+
 	if r.isConnected() == false {
 		err = r.Connect()
 		if err != nil {
@@ -187,7 +190,7 @@ func (r *RabbitMQ) QueueInit() (q amqp.Queue, err error) {
 		}
 	}
 
-	q, err = r.Channel.QueueDeclare(
+	q, err := r.Channel.QueueDeclare(
 		r.Exchange.QueueName,
 		r.Exchange.Q_Durable,
 		r.Exchange.Q_AutoDelete,
@@ -205,7 +208,11 @@ func (r *RabbitMQ) QueueInit() (q amqp.Queue, err error) {
 		r.Exchange.Name,       // exchange
 		false,
 		nil)
+	if err != nil {
+		return
+	}
 
+	r.Queue = q
 	return
 }
 
@@ -213,11 +220,9 @@ func (r *RabbitMQ) QueueInit() (q amqp.Queue, err error) {
 Consume - declaring queue, binding to Exchange and starting to consume (listen) messages
 */
 func (r *RabbitMQ) Consume() (err error) {
-	if len(r.Queue.Name) == 0 {
-		r.Queue, err = r.QueueInit()
-		if err != nil {
-			return
-		}
+	err = r.QueueInit()
+	if err != nil {
+		return
 	}
 
 	msgs, err := r.Channel.Consume(

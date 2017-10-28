@@ -37,8 +37,8 @@ type RabbitMQ struct {
 	Queue    amqp.Queue
 	hData    func([]byte) error
 	hEvent   func(RabbitMQEvent, interface{}) error
-	m        sync.Mutex
 	Debug    bool
+	sync.Mutex
 }
 
 // MQExchange - setting for MQ exchange
@@ -59,8 +59,8 @@ type MQExchange struct {
 
 // Connect - Connecting to Exchange
 func (r *RabbitMQ) Connect() error {
-	r.m.Lock()
-	defer r.m.Unlock()
+	r.Lock()
+	defer r.Unlock()
 	if r.State == statusConnecting {
 		time.Sleep(1 * time.Second)
 	}
@@ -138,8 +138,10 @@ func GetConnectedMQ(host Host, ex MQExchange, hd func([]byte) error) (rmq Rabbit
 Close - closing connections
 */
 func (r *RabbitMQ) Close() error {
-	r.Conn.Close()
-	r.Channel.Close()
+	if r.Conn != nil {
+		r.Conn.Close()
+		r.Channel.Close()
+	}
 	return nil
 }
 
@@ -248,7 +250,7 @@ func (r *RabbitMQ) Consume() (err error) {
 		}
 	}()
 
-	log.Println("Consuming...")
+	log.Printf("Consuming %s ...", r.Queue.Name)
 	return
 }
 

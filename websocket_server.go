@@ -39,8 +39,8 @@ type WebsocketServer struct {
 	onMessageHandler    map[string]MessageHandler
 
 	NewConnectionMessage string
-	mutex                sync.Mutex
-	Debug                bool
+	sync.Mutex
+	Debug bool
 }
 
 func (ws *WebsocketServer) Handler(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +95,8 @@ func (ws *WebsocketServer) Disconnect(ID string, err error) {
 }
 
 func (ws *WebsocketServer) Subscribe(channel, connectionID string) {
-	ws.mutex.Lock()
+	ws.Lock()
+	defer ws.Unlock()
 	fmt.Println("=========== Subscribe: before ===========")
 	fmt.Println("Subscriptions: ", ws.Subscriptions)
 	fmt.Println("Channel: ", ws.Subscriptions[channel])
@@ -112,10 +113,11 @@ func (ws *WebsocketServer) Subscribe(channel, connectionID string) {
 	fmt.Println("Subscriptions: ", ws.Subscriptions)
 	fmt.Println("Channel: ", ws.Subscriptions[channel])
 	fmt.Println("Len: ", len(ws.Subscriptions))
-	ws.mutex.Unlock()
+
 }
 func (ws *WebsocketServer) Unsubscribe(channel, connectionID string) {
-	ws.mutex.Lock()
+	ws.Lock()
+	defer ws.Unlock()
 	if ws.Debug == true {
 		fmt.Println("=========== Subscribe: before ===========")
 		fmt.Println("Subscriptions: ", ws.Subscriptions)
@@ -134,7 +136,6 @@ func (ws *WebsocketServer) Unsubscribe(channel, connectionID string) {
 		fmt.Println("Channel: ", ws.Subscriptions[channel])
 		fmt.Println("Len: ", len(ws.Subscriptions))
 	}
-	ws.mutex.Unlock()
 }
 
 func (ws *WebsocketServer) Broadcast(ch string, data interface{}) {
@@ -266,9 +267,9 @@ func (ws *WebsocketServer) SendResponse(c *websocket.Conn, mt int, data interfac
 	if err != nil {
 		return err
 	}
-	ws.mutex.Lock()
+	ws.Lock()
+	defer ws.Unlock()
 	err = c.WriteMessage(mt, message)
-	ws.mutex.Unlock()
 	if err != nil {
 		return err
 	}
@@ -315,9 +316,9 @@ func (ws *WebsocketServer) keepAlive(connID string) {
 		if c == nil {
 			return
 		}
-		ws.mutex.Lock()
+		ws.Lock()
 		err := c.WriteMessage(websocket.PingMessage, []byte("ping"))
-		ws.mutex.Unlock()
+		ws.Unlock()
 		if err != nil {
 			fmt.Println("Keepalive error:", err)
 			return

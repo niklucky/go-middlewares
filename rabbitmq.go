@@ -43,18 +43,18 @@ type RabbitMQ struct {
 
 // MQExchange - setting for MQ exchange
 type MQExchange struct {
-	Name         string
-	Type         string
-	RoutingKey   string `json:"routing_key"`
-	QueueName    string `json:"queue_name"`
-	Durable      bool
-	AutoDeleted  bool `json:"auto_deleted"`
-	NoWait       bool
-	Q_Durable    bool `json:"queue_durable"`
-	Q_AutoDelete bool `json:"queue_auto_delete"`
-	Q_Exclusive  bool `json:"queue_exclusive"`
-	C_AutoAck    bool `json:"queue_auto_ack"`
-	C_Exclusive  bool
+	Name            string
+	Type            string
+	RoutingKey      string `json:"routing_key"`
+	Durable         bool
+	AutoDeleted     bool `json:"auto_deleted"`
+	NoWait          bool
+	QueueName       string `json:"queue_name"`
+	QueueDurable    bool   `json:"queue_durable"`
+	QueueAutoDelete bool   `json:"queue_auto_delete"`
+	QueueExclusive  bool   `json:"queue_exclusive"`
+	C_AutoAck       bool   `json:"queue_auto_ack"`
+	C_Exclusive     bool
 }
 
 // Connect - Connecting to Exchange
@@ -191,9 +191,9 @@ func (r *RabbitMQ) QueueInit() (q amqp.Queue, err error) {
 
 	q, err = r.Channel.QueueDeclare(
 		r.Exchange.QueueName,
-		r.Exchange.Q_Durable,
-		r.Exchange.Q_AutoDelete,
-		r.Exchange.Q_Exclusive,
+		r.Exchange.QueueDurable,
+		r.Exchange.QueueAutoDelete,
+		r.Exchange.QueueExclusive,
 		r.Exchange.NoWait,
 		nil, // arguments
 	)

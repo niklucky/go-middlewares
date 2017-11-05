@@ -94,7 +94,7 @@ func (ws *WebsocketServer) Disconnect(ID string, err error) {
 	c.Close()
 }
 
-func (ws *WebsocketServer) Subscribe(channel, connectionID string) {
+func (ws *WebsocketServer) Subscribe(channel, connectionID string) error {
 	ws.Lock()
 	defer ws.Unlock()
 	fmt.Println("=========== Subscribe: before ===========")
@@ -113,9 +113,10 @@ func (ws *WebsocketServer) Subscribe(channel, connectionID string) {
 	fmt.Println("Subscriptions: ", ws.Subscriptions)
 	fmt.Println("Channel: ", ws.Subscriptions[channel])
 	fmt.Println("Len: ", len(ws.Subscriptions))
-
+	return nil
 }
-func (ws *WebsocketServer) Unsubscribe(channel, connectionID string) {
+
+func (ws *WebsocketServer) Unsubscribe(channel, connectionID string) error {
 	ws.Lock()
 	defer ws.Unlock()
 	if ws.Debug == true {
@@ -127,7 +128,7 @@ func (ws *WebsocketServer) Unsubscribe(channel, connectionID string) {
 	ch := ws.Subscriptions[channel]
 
 	if ch == nil {
-		return
+		return nil
 	}
 	delete(ws.Subscriptions[channel], connectionID)
 	if ws.Debug == true {
@@ -136,6 +137,7 @@ func (ws *WebsocketServer) Unsubscribe(channel, connectionID string) {
 		fmt.Println("Channel: ", ws.Subscriptions[channel])
 		fmt.Println("Len: ", len(ws.Subscriptions))
 	}
+	return nil
 }
 
 func (ws *WebsocketServer) Broadcast(ch string, data interface{}) {
@@ -214,9 +216,21 @@ func (ws *WebsocketServer) destroyConnection(ID string) error {
 		return nil
 	}
 	delete(ws.Connections, ID)
+	ws.unsubscribe(ID)
 	fmt.Println("Disconnected: ", ID, len(ws.Connections))
 	fmt.Println("Connections: ", ws.Connections)
 	return nil
+}
+
+/*
+unsubscribe - Unsubscribing connection from all channels
+*/
+func (ws *WebsocketServer) unsubscribe(connectionID string) {
+	for ch, s := range ws.Subscriptions {
+		if _, ok := s[connectionID]; ok {
+			ws.Unsubscribe(ch, connectionID)
+		}
+	}
 }
 
 func (ws *WebsocketServer) OnConnect(route string, handler ConnectionHandler) {

@@ -38,7 +38,7 @@ type RabbitMQ struct {
 	hData    func([]byte) error
 	hEvent   func(RabbitMQEvent, interface{}) error
 	Debug    bool
-	RawMode  bool // false - send JSON, true - send raw bytes
+	rawMode  bool // false - send JSON, true - send raw bytes
 	sync.Mutex
 }
 

@@ -157,7 +157,7 @@ func (r *RabbitMQ) Publish(data interface{}) (err error) {
 		}
 	}
 	var body []byte
-	if r.RawMode {
+	if r.rawMode {
 		body = data.([]byte)
 	} else {
 		body, err = json.Marshal(data)
@@ -180,7 +180,7 @@ func (r *RabbitMQ) Publish(data interface{}) (err error) {
 }
 
 func (r *RabbitMQ) SetMode(mode bool) {
-	r.RawMode = mode
+	r.rawMode = mode
 }
 
 func (r *RabbitMQ) AddConsumer(h func([]byte) error) {

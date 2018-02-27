@@ -38,6 +38,7 @@ type RabbitMQ struct {
 	hData    func([]byte) error
 	hEvent   func(RabbitMQEvent, interface{}) error
 	Debug    bool
+	rawMode  bool // false - send JSON, true - send raw bytes
 	sync.Mutex
 }
 
@@ -148,16 +149,21 @@ func (r *RabbitMQ) Close() error {
 /*
 Publish — publishing message to RabbitMQ exchange
 */
-func (r *RabbitMQ) Publish(data interface{}) error {
+func (r *RabbitMQ) Publish(data interface{}) (err error) {
 	if r.isConnected() == false {
-		err := r.Connect()
+		err = r.Connect()
 		if err != nil {
-			return err
+			return
 		}
 	}
-	body, err := json.Marshal(data)
-	if err != nil {
-		return err
+	var body []byte
+	if r.rawMode {
+		body = data.([]byte)
+	} else {
+		body, err = json.Marshal(data)
+		if err != nil {
+			return
+		}
 	}
 	if r.Debug {
 		fmt.Println("[DEBUG] Message: ", string(body))
@@ -168,9 +174,13 @@ func (r *RabbitMQ) Publish(data interface{}) error {
 		false, // mandatory
 		false, // immediate
 		amqp.Publishing{
-			ContentType: "text/plain",
+			ContentType: "text/plain", // or "application/octet-stream"
 			Body:        body,
 		})
+}
+
+func (r *RabbitMQ) SetMode(mode bool) {
+	r.rawMode = mode
 }
 
 func (r *RabbitMQ) AddConsumer(h func([]byte) error) {
@@ -251,6 +261,31 @@ func (r *RabbitMQ) Consume() (err error) {
 	}()
 
 	log.Printf("Consuming %s ...", r.Queue.Name)
+	return
+}
+
+/*
+ConsumeOneMessage - get one message from special publisher
+If there are currently no messages in chanel function blocks thread execution
+*/
+func (r *RabbitMQ) ConsumeOneMessage() (data []byte, err error) {
+
+	msgs, err := r.Channel.Consume(
+		r.Queue.Name,           // queue
+		"",                     // consumer
+		r.Exchange.C_AutoAck,   // auto-ack
+		r.Exchange.C_Exclusive, // exclusive
+		false, // no-local
+		false, // no-wait
+		nil,   // args
+	)
+	if err != nil {
+		return
+	}
+
+	delivery := <-msgs
+	data = delivery.Body
+
 	return
 }
 

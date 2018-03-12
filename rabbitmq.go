@@ -264,31 +264,6 @@ func (r *RabbitMQ) Consume() (err error) {
 	return
 }
 
-/*
-ConsumeOneMessage - get one message from special publisher
-If there are currently no messages in chanel function blocks thread execution
-*/
-func (r *RabbitMQ) ConsumeOneMessage() (data []byte, err error) {
-
-	msgs, err := r.Channel.Consume(
-		r.Queue.Name,           // queue
-		"",                     // consumer
-		r.Exchange.C_AutoAck,   // auto-ack
-		r.Exchange.C_Exclusive, // exclusive
-		false, // no-local
-		false, // no-wait
-		nil,   // args
-	)
-	if err != nil {
-		return
-	}
-
-	delivery := <-msgs
-	data = delivery.Body
-
-	return
-}
-
 func (r *RabbitMQ) getAddressString() string {
 	return "amqp://" + r.Host.User + ":" + r.Host.Password + "@" + r.Host.Host + ":" + strconv.Itoa(r.Host.Port)
 }

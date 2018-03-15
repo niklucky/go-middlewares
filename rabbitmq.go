@@ -38,6 +38,7 @@ type RabbitMQ struct {
 	hData    func([]byte) error
 	hEvent   func(RabbitMQEvent, interface{}) error
 	Debug    bool
+	rawMode  bool // false - send JSON, true - send raw bytes
 	sync.Mutex
 }
 
@@ -149,16 +150,21 @@ func (r *RabbitMQ) Close() error {
 /*
 Publish — publishing message to RabbitMQ exchange
 */
-func (r *RabbitMQ) Publish(data interface{}) error {
+func (r *RabbitMQ) Publish(data interface{}) (err error) {
 	if r.isConnected() == false {
-		err := r.Connect()
+		err = r.Connect()
 		if err != nil {
-			return err
+			return
 		}
 	}
-	body, err := json.Marshal(data)
-	if err != nil {
-		return err
+	var body []byte
+	if r.rawMode {
+		body = data.([]byte)
+	} else {
+		body, err = json.Marshal(data)
+		if err != nil {
+			return
+		}
 	}
 	if r.Debug {
 		fmt.Println("[DEBUG] Message: ", string(body))
@@ -169,9 +175,13 @@ func (r *RabbitMQ) Publish(data interface{}) error {
 		false, // mandatory
 		false, // immediate
 		amqp.Publishing{
-			ContentType: "text/plain",
+			ContentType: "text/plain", // or "application/octet-stream"
 			Body:        body,
 		})
+}
+
+func (r *RabbitMQ) SetMode(mode bool) {
+	r.rawMode = mode
 }
 
 func (r *RabbitMQ) AddConsumer(h func([]byte) error) {

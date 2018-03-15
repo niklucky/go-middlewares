@@ -65,7 +65,7 @@ func (srv *HTTPServer) getHost() string {
 
 func (srv *HTTPServer) SendError(w http.ResponseWriter, httpCode int, err error) {
 	e := make(map[string]interface{})
-	e["error"] = err
+	e["error"] = err.Error()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(httpCode)
 	b, _ := json.Marshal(e)

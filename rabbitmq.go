@@ -111,22 +111,21 @@ func max(x, y int) int {
 /*
 ReConnect - reopen connection
 */
-func (r *RabbitMQ) Reconnect() error {
-	r.Close()
+func (r *RabbitMQ) Reconnect() (err error) {
 	for i := 0; i < max(1, r.Host.Reconnect); i++ {
-		if err := r.Connect(); err != nil {
+		if err = r.Connect(); err != nil {
 			if r.Host.Reconnect > 0 {
 				fmt.Printf("[ERROR][MQ] %s, try to reconnect...\n", err)
 				time.Sleep(time.Duration(max(1, r.Host.Delay)) * time.Second)
 			}
 		} else {
-			if _, err := r.QueueInit(); err != nil {
-				return err
+			if _, err = r.QueueInit(); err != nil {
+				return
 			}
 			break
 		}
 	}
-	return nil
+	return
 }
 
 /*

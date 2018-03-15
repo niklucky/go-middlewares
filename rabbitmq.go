@@ -59,31 +59,28 @@ type MQExchange struct {
 }
 
 // Connect - Connecting to Exchange
-func (r *RabbitMQ) Connect() error {
+func (r *RabbitMQ) Connect() (err error) {
 	r.Lock()
 	defer r.Unlock()
 	if r.State == statusConnecting {
 		time.Sleep(1 * time.Second)
 	}
-	if r.State == statusConnecting {
-		return nil
+	if r.State == statusConnected {
+		return
 	}
 	r.State = statusConnecting
 	fmt.Println("[LOG][MQ] Connecting to: ", r.getInfo())
-	conn, err := amqp.Dial(r.getAddressString())
-	if err != nil {
+	if r.Conn, err = amqp.Dial(r.getAddressString()); err != nil {
 		logOnError(err, "Dial")
+		r.State = ""
+		return
+	}
+	if r.Channel, err = r.Conn.Channel(); err != nil {
+		r.Conn.Close()
 		r.State = ""
 		return err
 	}
-	r.Conn = conn
-	ch, err := conn.Channel()
-	if err != nil {
-		return err
-	}
-	r.Channel = ch
-	r.State = statusConnecting
-	err = ch.ExchangeDeclare(
+	err = r.Channel.ExchangeDeclare(
 		r.Exchange.Name,
 		r.Exchange.Type,
 		r.Exchange.Durable,
@@ -94,10 +91,13 @@ func (r *RabbitMQ) Connect() error {
 	)
 
 	if err != nil {
+		r.Conn.Close()
+		r.State = ""
 		fmt.Println("[ERROR][MQ] Error in ExchangeDeclare: ", err)
 	}
 	fmt.Println("[LOG][MQ] Connected to: ", r.getInfo())
-	return err
+	r.State = statusConnected
+	return
 }
 
 func max(x, y int) int {
@@ -143,6 +143,7 @@ func (r *RabbitMQ) Close() error {
 		r.Conn.Close()
 		r.Channel.Close()
 	}
+	r.State = ""
 	return nil
 }
 

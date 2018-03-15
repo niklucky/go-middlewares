@@ -37,52 +37,51 @@ type RabbitMQ struct {
 	Queue    amqp.Queue
 	hData    func([]byte) error
 	hEvent   func(RabbitMQEvent, interface{}) error
-	m        sync.Mutex
 	Debug    bool
+	rawMode  bool // false - send JSON, true - send raw bytes
+	sync.Mutex
 }
 
 // MQExchange - setting for MQ exchange
 type MQExchange struct {
-	Name         string
-	Type         string
-	RoutingKey   string `json:"routing_key"`
-	QueueName    string `json:"queue_name"`
-	Durable      bool
-	AutoDeleted  bool `json:"auto_deleted"`
-	NoWait       bool
-	Q_Durable    bool `json:"queue_durable"`
-	Q_AutoDelete bool `json:"queue_auto_delete"`
-	Q_Exclusive  bool `json:"queue_exclusive"`
-	C_AutoAck    bool `json:"queue_auto_ack"`
-	C_Exclusive  bool
+	Name            string
+	Type            string
+	RoutingKey      string `json:"routing_key"`
+	Durable         bool
+	AutoDeleted     bool `json:"auto_deleted"`
+	NoWait          bool
+	QueueName       string `json:"queue_name"`
+	QueueDurable    bool   `json:"queue_durable"`
+	QueueAutoDelete bool   `json:"queue_auto_delete"`
+	QueueExclusive  bool   `json:"queue_exclusive"`
+	C_AutoAck       bool   `json:"queue_auto_ack"`
+	C_Exclusive     bool
 }
 
 // Connect - Connecting to Exchange
-func (r *RabbitMQ) Connect() error {
-	r.m.Lock()
-	defer r.m.Unlock()
+func (r *RabbitMQ) Connect() (err error) {
+	r.Lock()
+	defer r.Unlock()
 	if r.State == statusConnecting {
 		time.Sleep(1 * time.Second)
 	}
-	if r.State == statusConnecting {
-		return nil
+	if r.State == statusConnected {
+		return
 	}
 	r.State = statusConnecting
 	fmt.Println("[LOG][MQ] Connecting to: ", r.getInfo())
-	conn, err := amqp.Dial(r.getAddressString())
-	if err != nil {
+	if r.Conn, err = amqp.Dial(r.getAddressString()); err != nil {
 		logOnError(err, "Dial")
+		r.State = ""
+		return
+	}
+	if r.Channel, err = r.Conn.Channel(); err != nil {
+		logOnError(err, "Channel")
+		r.Conn.Close()
 		r.State = ""
 		return err
 	}
-	r.Conn = conn
-	ch, err := conn.Channel()
-	if err != nil {
-		return err
-	}
-	r.Channel = ch
-	r.State = statusConnecting
-	err = ch.ExchangeDeclare(
+	err = r.Channel.ExchangeDeclare(
 		r.Exchange.Name,
 		r.Exchange.Type,
 		r.Exchange.Durable,
@@ -93,10 +92,13 @@ func (r *RabbitMQ) Connect() error {
 	)
 
 	if err != nil {
+		r.Conn.Close()
+		r.State = ""
 		fmt.Println("[ERROR][MQ] Error in ExchangeDeclare: ", err)
 	}
 	fmt.Println("[LOG][MQ] Connected to: ", r.getInfo())
-	return err
+	r.State = statusConnected
+	return
 }
 
 func max(x, y int) int {
@@ -104,6 +106,27 @@ func max(x, y int) int {
 		return x
 	}
 	return y
+}
+
+/*
+ReConnect - reopen connection
+*/
+func (r *RabbitMQ) Reconnect() error {
+	r.Close()
+	for i := 0; i < max(1, r.Host.Reconnect); i++ {
+		if err := r.Connect(); err != nil {
+			if r.Host.Reconnect > 0 {
+				fmt.Printf("[ERROR][MQ] %s, try to reconnect...\n", err)
+				time.Sleep(time.Duration(max(1, r.Host.Delay)) * time.Second)
+			}
+		} else {
+			if _, err := r.QueueInit(); err != nil {
+				return err
+			}
+			break
+		}
+	}
+	return nil
 }
 
 /*
@@ -135,24 +158,33 @@ func GetConnectedMQ(host Host, ex MQExchange, hd func([]byte) error) (rmq *Rabbi
 /*
 Close - closing connections
 */
-func (r *RabbitMQ) Close() {
-	r.Conn.Close()
-	r.Channel.Close()
+func (r *RabbitMQ) Close() error {
+	if r.Conn != nil {
+		r.Conn.Close()
+		r.Channel.Close()
+	}
+	r.State = ""
+	return nil
 }
 
 /*
 Publish — publishing message to RabbitMQ exchange
 */
-func (r *RabbitMQ) Publish(data interface{}) error {
+func (r *RabbitMQ) Publish(data interface{}) (err error) {
 	if r.isConnected() == false {
-		err := r.Connect()
+		err = r.Connect()
 		if err != nil {
-			return err
+			return
 		}
 	}
-	body, err := json.Marshal(data)
-	if err != nil {
-		return err
+	var body []byte
+	if r.rawMode {
+		body = data.([]byte)
+	} else {
+		body, err = json.Marshal(data)
+		if err != nil {
+			return
+		}
 	}
 	if r.Debug {
 		fmt.Println("[DEBUG] Message: ", string(body))
@@ -163,9 +195,13 @@ func (r *RabbitMQ) Publish(data interface{}) error {
 		false, // mandatory
 		false, // immediate
 		amqp.Publishing{
-			ContentType: "text/plain",
+			ContentType: "text/plain", // or "application/octet-stream"
 			Body:        body,
 		})
+}
+
+func (r *RabbitMQ) SetMode(mode bool) {
+	r.rawMode = mode
 }
 
 func (r *RabbitMQ) AddConsumer(h func([]byte) error) {
@@ -191,9 +227,9 @@ func (r *RabbitMQ) QueueInit() (err error) {
 
 	q, err := r.Channel.QueueDeclare(
 		r.Exchange.QueueName,
-		r.Exchange.Q_Durable,
-		r.Exchange.Q_AutoDelete,
-		r.Exchange.Q_Exclusive,
+		r.Exchange.QueueDurable,
+		r.Exchange.QueueAutoDelete,
+		r.Exchange.QueueExclusive,
 		r.Exchange.NoWait,
 		nil, // arguments
 	)
@@ -254,7 +290,7 @@ func (r *RabbitMQ) Consume() (err error) {
 		}
 	}()
 
-	log.Println("Сonsuming: " + r.Queue.Name)
+	log.Printf("Consuming %s ...", r.Queue.Name)
 	return
 }
 

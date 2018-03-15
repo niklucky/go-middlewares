@@ -76,6 +76,7 @@ func (r *RabbitMQ) Connect() (err error) {
 		return
 	}
 	if r.Channel, err = r.Conn.Channel(); err != nil {
+		logOnError(err, "Channel")
 		r.Conn.Close()
 		r.State = ""
 		return err
@@ -105,6 +106,27 @@ func max(x, y int) int {
 		return x
 	}
 	return y
+}
+
+/*
+ReConnect - reopen connection
+*/
+func (r *RabbitMQ) Reconnect() error {
+	r.Close()
+	for i := 0; i < max(1, r.Host.Reconnect); i++ {
+		if err := r.Connect(); err != nil {
+			if r.Host.Reconnect > 0 {
+				fmt.Printf("[ERROR][MQ] %s, try to reconnect...\n", err)
+				time.Sleep(time.Duration(max(1, r.Host.Delay)) * time.Second)
+			}
+		} else {
+			if _, err := r.QueueInit(); err != nil {
+				return err
+			}
+			break
+		}
+	}
+	return nil
 }
 
 /*

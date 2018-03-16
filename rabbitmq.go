@@ -108,6 +108,13 @@ func max(x, y int) int {
 	return y
 }
 
+func min(x, y int) int {
+	if x > y {
+		return y
+	}
+	return x
+}
+
 /*
 ReConnect - reopen connection
 */
@@ -116,7 +123,7 @@ func (r *RabbitMQ) Reconnect() (err error) {
 		if err = r.Connect(); err != nil {
 			if r.Host.Reconnect > 0 {
 				fmt.Printf("[ERROR][MQ] %s, try to reconnect...\n", err)
-				time.Sleep(time.Duration(max(1, r.Host.Delay)) * time.Second)
+				time.Sleep(time.Duration(max(1, r.Host.Delay*min(i, 10))) * time.Second)
 			}
 		} else {
 			if _, err = r.QueueInit(); err != nil {

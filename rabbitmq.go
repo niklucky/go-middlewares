@@ -54,6 +54,8 @@ type MQExchange struct {
 	QueueDurable    bool   `json:"queue_durable"`
 	QueueAutoDelete bool   `json:"queue_auto_delete"`
 	QueueExclusive  bool   `json:"queue_exclusive"`
+	QueueTTL        int32  `json:"queue_ttl"` // TTL period in milliseconds
+	MessageTTL      int32  `json:"message_ttl"`
 	C_AutoAck       bool   `json:"queue_auto_ack"`
 	C_Exclusive     bool
 }
@@ -171,6 +173,7 @@ func GetConnectedMQ(host Host, ex MQExchange, hd func([]byte) error) (rmq Rabbit
 Close - closing connections
 */
 func (r *RabbitMQ) Close() error {
+	r.hEvent = nil
 	if r.Conn != nil {
 		r.Conn.Close()
 		r.Channel.Close()
@@ -232,13 +235,18 @@ func (r *RabbitMQ) QueueInit() (q amqp.Queue, err error) {
 		}
 	}
 
+	var arguments amqp.Table = make(amqp.Table)
+	if r.Exchange.MessageTTL != 0 {
+		arguments["x-message-ttl"] = r.Exchange.MessageTTL
+	}
+
 	q, err = r.Channel.QueueDeclare(
 		r.Exchange.QueueName,
 		r.Exchange.QueueDurable,
 		r.Exchange.QueueAutoDelete,
 		r.Exchange.QueueExclusive,
 		r.Exchange.NoWait,
-		nil, // arguments
+		arguments,
 	)
 	if err != nil {
 		return

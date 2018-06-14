@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -61,14 +62,16 @@ func (ws *WebsocketClient) Listen() {
 	if ws.Conn == nil {
 		ws.Connect()
 	}
-	pongWait := 5 * time.Second
+	pongWait := 6 * time.Second
 	ws.Conn.SetReadDeadline(time.Now().Add(pongWait))
 	ws.Conn.SetPongHandler(func(string) error {
 		ws.Conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
-	go ws.checkConnection()
-	go func() {
+	var checkConnectFlag int32 = 1
+	go ws.checkConnection(&checkConnectFlag)
+	go func(checkConnectFlag *int32) {
+		defer atomic.StoreInt32(checkConnectFlag, 0)
 		defer ws.Conn.Close()
 		for {
 			var message interface{}
@@ -82,14 +85,12 @@ func (ws *WebsocketClient) Listen() {
 			}
 			go ws.handleData(message)
 		}
-	}()
+	}(&checkConnectFlag)
 }
 
-func (ws *WebsocketClient) checkConnection() {
-	for {
-		defer ws.Conn.Close()
-		err := ws.Conn.WriteMessage(websocket.PingMessage, []byte("PING"))
-		if err != nil {
+func (ws *WebsocketClient) checkConnection(checkConnectFlag *int32) {
+	for atomic.LoadInt32(checkConnectFlag) == 1 {
+		if err := ws.Conn.WriteMessage(websocket.PingMessage, []byte("PING")); err != nil {
 			log.Println("[ERROR][WS] Sending ping: ", err)
 			return
 		}

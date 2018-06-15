@@ -62,7 +62,7 @@ func (ws *WebsocketClient) Listen() {
 	if ws.Conn == nil {
 		ws.Connect()
 	}
-	pongWait := 6 * time.Second
+	pongWait := 10 * time.Second
 	ws.Conn.SetReadDeadline(time.Now().Add(pongWait))
 	ws.Conn.SetPongHandler(func(string) error {
 		ws.Conn.SetReadDeadline(time.Now().Add(pongWait))

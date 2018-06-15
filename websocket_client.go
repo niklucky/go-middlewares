@@ -6,11 +6,16 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+type writingMessage struct {
+	messageType int
+	data        []byte
+}
 
 /*
 WebsocketClient - client that listens for events and sends actions to Websocket server
@@ -20,6 +25,9 @@ type WebsocketClient struct {
 	Conn         *websocket.Conn
 	dataHandler  func(interface{})
 	errorHandler func(interface{})
+	writeChan    chan writingMessage
+	writeErrChan chan error
+	initData     sync.Once
 }
 
 /*
@@ -51,6 +59,16 @@ func (ws *WebsocketClient) Connect() error {
 	if err != nil {
 		return err
 	}
+	ws.initData.Do(func() {
+		ws.writeChan = make(chan writingMessage)
+		ws.writeErrChan = make(chan error)
+		go func() {
+			for {
+				message := <-ws.writeChan
+				ws.writeErrChan <- ws.Conn.WriteMessage(message.messageType, message.data)
+			}
+		}()
+	})
 	log.Println("[WS] Connected to server")
 	return nil
 }
@@ -62,16 +80,14 @@ func (ws *WebsocketClient) Listen() {
 	if ws.Conn == nil {
 		ws.Connect()
 	}
-	pongWait := 10 * time.Second
-	ws.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	var checkConnDone = make(chan struct{})
 	ws.Conn.SetPongHandler(func(string) error {
-		ws.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		ws.Conn.SetReadDeadline(time.Time{})
 		return nil
 	})
-	var checkConnectFlag int32 = 1
-	go ws.checkConnection(&checkConnectFlag)
-	go func(checkConnectFlag *int32) {
-		defer atomic.StoreInt32(checkConnectFlag, 0)
+	go ws.checkConnection(checkConnDone)
+	go func(checkConnDone chan<- struct{}) {
+		defer close(checkConnDone)
 		defer ws.Conn.Close()
 		for {
 			var message interface{}
@@ -85,17 +101,35 @@ func (ws *WebsocketClient) Listen() {
 			}
 			go ws.handleData(message)
 		}
-	}(&checkConnectFlag)
+	}(checkConnDone)
 }
 
-func (ws *WebsocketClient) checkConnection(checkConnectFlag *int32) {
-	for atomic.LoadInt32(checkConnectFlag) == 1 {
-		if err := ws.Conn.WriteMessage(websocket.PingMessage, []byte("PING")); err != nil {
-			log.Println("[ERROR][WS] Sending ping: ", err)
+func (ws *WebsocketClient) checkConnection(done <-chan struct{}) {
+	var timer *time.Timer
+	pingInterval := 5 * time.Second
+	pongWait := 5 * time.Second
+	for {
+		ws.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		if err := ws.writeMessage(websocket.PingMessage, []byte("PING")); err != nil {
+			log.Printf("[ERROR][WS] Sending ping: %v", err)
 			return
 		}
-		time.Sleep(5 * time.Second)
+		if timer == nil {
+			timer = time.NewTimer(pingInterval)
+		}
+		select {
+		case <-done:
+			return
+		case <-timer.C:
+			timer.Reset(pingInterval)
+		}
 	}
+}
+
+func (ws *WebsocketClient) writeMessage(messageType int, data []byte) error {
+	ws.writeChan <- writingMessage{messageType: messageType, data: data}
+	err := <-ws.writeErrChan
+	return err
 }
 
 func (ws *WebsocketClient) handleData(data interface{}) {
@@ -118,7 +152,7 @@ func (ws *WebsocketClient) Send(data interface{}) error {
 	if err != nil {
 		return err
 	}
-	return ws.Conn.WriteMessage(websocket.TextMessage, req)
+	return ws.writeMessage(websocket.TextMessage, req)
 }
 
 func (ws *WebsocketClient) getAddress() string {
@@ -131,7 +165,7 @@ Close - closing connection
 func (ws *WebsocketClient) Close() error {
 	fmt.Println("[WS][CLIENT] Closing connection")
 	if ws.Conn != nil {
-		return ws.Conn.WriteMessage(
+		return ws.writeMessage(
 			websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
 		)

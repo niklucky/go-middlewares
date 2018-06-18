@@ -111,7 +111,8 @@ func (ws *WebsocketClient) checkConnection(done <-chan struct{}) {
 	for {
 		ws.Conn.SetReadDeadline(time.Now().Add(pongWait))
 		if err := ws.writeMessage(websocket.PingMessage, []byte("PING")); err != nil {
-			log.Printf("[ERROR][WS] Sending ping: %v", err)
+			ws.Conn.SetReadDeadline(time.Time{})
+			log.Println("[ERROR][WS] Sending ping:", err)
 			return
 		}
 		if timer == nil {

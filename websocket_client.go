@@ -106,8 +106,8 @@ func (ws *WebsocketClient) Listen() {
 
 func (ws *WebsocketClient) checkConnection(done <-chan struct{}) {
 	var timer *time.Timer
-	pingInterval := 5 * time.Second
-	pongWait := 4 * time.Second // less than pingInterval
+	pingInterval := 10 * time.Second
+	pongWait := 9 * time.Second // less than pingInterval
 	for {
 		ws.Conn.SetReadDeadline(time.Now().Add(pongWait))
 		if err := ws.writeMessage(websocket.PingMessage, []byte("PING")); err != nil {

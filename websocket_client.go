@@ -80,7 +80,7 @@ func (ws *WebsocketClient) Listen() {
 	if ws.Conn == nil {
 		ws.Connect()
 	}
-	var checkConnDone = make(chan struct{})
+	checkConnDone := make(chan struct{})
 	ws.Conn.SetPongHandler(func(string) error {
 		ws.Conn.SetReadDeadline(time.Time{})
 		return nil
